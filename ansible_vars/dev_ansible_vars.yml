@@ -1,0 +1,25 @@
+# sample pyconfig file
+# for 'local' run app will read from this file in order to populate OS environment variables
+# for all other environments, ansible playbook would create an AWS task definition that would
+# then pump these variables and values into the OS Environment for the docker container
+#
+# for 'target_app_secrets_ref' the task definition will include the lookup keys, which will be
+# fulfilled when the task definition is run
+target_app_secrets_ref:
+  - SOME_SECRET_KEY:  <identifier for a valid aws secret stored in either parameter store or secrets manager>
+    SOME_OTHER_SECRET_KEY: <identifier for a valid aws secret stored in either parameter store or secrets manager>
+    STILL_OTHER_SECRET_KEY: <identifier for a valid aws secret stored in either parameter store or secrets manager>
+# for 'target_app_env' the keys and values are exactly included in the task definition
+target_app_env:
+  - name: SOME_KEY
+    value: <some value>
+  - name: SOME_OTHER_KEY
+    value: <some other value>
+  - name: STILL_ANOTHER_KEY
+    value: <still another value>
+
+
+# other values listed here will be ignored by this module, but
+# could be used by, for example, an ansible deploy script
+deploy_type: <some deploy type>
+target_app_name: <a valid app name for your build process>
