@@ -16,18 +16,6 @@ from botocore.exceptions import ClientError
 CONFIG = None
 NO_VALUE_FOUND = "NO VALUE FOUND"
 
-logger = logging.getLogger(__name__)
-stream_handler = logging.StreamHandler()
-stream_handler.setLevel(logging.INFO)
-stream_format = logging.Formatter(
-    '{"log_level": "%(levelname)s", '
-    '"app_file_line": "%(name)s:%(lineno)d", '
-    '"message": %(message)s}'
-)
-stream_handler.setFormatter(stream_format)
-logger.addHandler(stream_handler)
-logger.setLevel(logging.INFO)
-
 
 class Stack(Enum):
     LOCAL = "local"
@@ -56,13 +44,15 @@ class Config:
 
     def __init__(self, stack: Stack = Stack.LOCAL,
                  secret_service: SecretService = SecretService.SECRETS_MANAGER,
-                 ansible_vars_dir_path: str = "./ansible_vars"):
+                 ansible_vars_dir_path: str = "./ansible_vars",
+                 logging_format: logging.Formatter = None):
         """
          Retrieve values from OS environment or read from pyconfig files
         :param stack: defaults to Stack.LOCAL
         :param secret_service: defaults to SecretService.SECRETS_MANAGER
         :param ansible_vars_dir_path: defaults to './ansible_vars'
         """
+        self.logger = self.setup_logger(logging_format)
         self.stack = stack
         self.config_stack = stack
         self.ansible_vars_dir_path = ansible_vars_dir_path
@@ -73,6 +63,23 @@ class Config:
 
         global CONFIG
         CONFIG = self
+
+    @staticmethod
+    def setup_logger(logging_format: logging.Formatter = None) -> logging.Logger:
+        logger = logging.getLogger(__name__)
+        stream_handler = logging.StreamHandler()
+        stream_handler.setLevel(logging.INFO)
+
+        if logging_format is None:
+            logging_format = logging.Formatter(
+                '{"log_level": "%(levelname)s", '
+                '"app_file_line": "%(name)s:%(lineno)d", '
+                '"message": %(message)s}'
+            )
+        stream_handler.setFormatter(logging_format)
+        logger.addHandler(stream_handler)
+        logger.setLevel(logging.INFO)
+        return logger
 
     @staticmethod
     def get_value(name):
@@ -106,14 +113,14 @@ class Config:
         :param app_dict:
         :return:
         """
-        logger.debug(f"=======INSIDE populate secrets =======")
+        self.logger.debug(f"=======INSIDE populate secrets =======")
         try:
             var_dict = app_dict.get(self.SECRETS_REF_KEY)[0]
-            logger.debug(var_dict)
+            self.logger.debug(var_dict)
             for k, v in var_dict.items():
                 os.environ[k] = f"{self.get_secret_value(v)}"
         except yaml.YAMLError as exc:
-            logger.exception(exc)
+            self.logger.exception(exc)
 
     def populate_vars(self, app_dict):
         """
@@ -130,7 +137,7 @@ class Config:
         :param app_dict:
         :return:
         """
-        logger.debug(f"======= parsing pyconfig vars and values =======")
+        self.logger.debug(f"======= parsing pyconfig vars and values =======")
         try:
             var_dict = {}
             for item in app_dict.get(self.APP_ENV_KEY):
@@ -140,13 +147,12 @@ class Config:
                     if key == "value":
                         var_value = value
                 os.environ[var_name] = f"{var_value}"
-            logger.debug(var_dict)
+            self.logger.debug(var_dict)
             return var_dict
         except yaml.YAMLError as exc:
-            logger.exception(exc)
+            self.logger.exception(exc)
 
-    @staticmethod
-    def get_secret(name):
+    def get_secret(self, name):
         secret_name = name
         session = boto3.session.Session()
         region_name = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
@@ -158,17 +164,16 @@ class Config:
             else:
                 secret = base64.b64decode(get_secret_value_response["SecretBinary"])
         except ClientError as error:
-            logger.error("Lookup " + secret_name + ": " + str(error))
+            self.logger.error("Lookup " + secret_name + ": " + str(error))
             secret = error
         return secret
 
-    @staticmethod
-    def get_ssm_param(name):
+    def get_ssm_param(self, name):
         """
          Retrieve a parameter from SSM
          """
         ssm_client = boto3.client('ssm')
-        logger.info(f"param name = {name}")
+        self.logger.info(f"param name = {name}")
         parameter = ssm_client.get_parameter(
             Name=name,
             WithDecryption=True)
