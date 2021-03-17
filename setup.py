@@ -8,7 +8,7 @@ setuptools.setup(
     version="0.0.1",
     author="Michael Kerry",
     author_email="michael_kerry@harvard.edu",
-    description="A package to facilitate the use of slack webhook for notifications",
+    description="A package to facilitate use of config for aws-hosted python appilcations",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/huit/pyconfig",
