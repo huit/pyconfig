@@ -10,6 +10,8 @@ from enum import Enum
 
 from botocore.exceptions import ClientError
 
+from pylog.pylog import get_common_logger_for_module
+
 #============================================================================================
 # Globals
 #============================================================================================
@@ -45,14 +47,17 @@ class Config:
     def __init__(self, stack: Stack = Stack.LOCAL,
                  secret_service: SecretService = SecretService.SECRETS_MANAGER,
                  ansible_vars_dir_path: str = "./ansible_vars",
+                 logging_level: int = 50,
                  logging_format: logging.Formatter = None):
         """
-         Retrieve values from OS environment or read from pyconfig files
+                 Retrieve values from OS environment or read from pyconfig files
         :param stack: defaults to Stack.LOCAL
         :param secret_service: defaults to SecretService.SECRETS_MANAGER
         :param ansible_vars_dir_path: defaults to './ansible_vars'
+        :param logging_level: defaults to logging.CRITICAL
+        :param logging_format: defaults to None
         """
-        self.logger = self.setup_logger(logging_format)
+        self.logger = get_common_logger_for_module(module_name=__name__, level=logging_level, log_format=logging_format)
         self.stack = stack
         self.config_stack = stack
         self.ansible_vars_dir_path = ansible_vars_dir_path
@@ -63,23 +68,6 @@ class Config:
 
         global CONFIG
         CONFIG = self
-
-    @staticmethod
-    def setup_logger(logging_format: logging.Formatter = None) -> logging.Logger:
-        logger = logging.getLogger(__name__)
-        stream_handler = logging.StreamHandler()
-        stream_handler.setLevel(logging.INFO)
-
-        if logging_format is None:
-            logging_format = logging.Formatter(
-                '{"log_level": "%(levelname)s", '
-                '"app_file_line": "%(name)s:%(lineno)d", '
-                '"message": %(message)s}'
-            )
-        stream_handler.setFormatter(logging_format)
-        logger.addHandler(stream_handler)
-        logger.setLevel(logging.INFO)
-        return logger
 
     @staticmethod
     def get_value(name):

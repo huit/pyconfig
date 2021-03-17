@@ -23,7 +23,8 @@ setuptools.setup(
     install_requires=[
         'boto3==1.12.36',
         'botocore==1.15.36',
-        'PyYAML==5.3.1'
+        'PyYAML==5.3.1',
+        'pylog @ https://github.com/huit/pylog/archive/v0.0.1.tar.gz#egg=pylog',
     ],
     packages=setuptools.find_packages(),
     python_requires=">=3.7",
