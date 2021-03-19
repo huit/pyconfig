@@ -62,6 +62,7 @@ class Config:
         self.config_stack = stack
         self.ansible_vars_dir_path = ansible_vars_dir_path
         self.secret_service = secret_service
+        self.value_store = {}
         if self.stack == Stack.LOCAL:
             self.config_stack = Stack.DEV
             self.populate_os_env()
@@ -69,14 +70,21 @@ class Config:
         global CONFIG
         CONFIG = self
 
-    @staticmethod
-    def get_value(name):
+    def get_value(self, name):
         """
-        check for value in the OS ENV which is populated at command line or by AWS task definition
+        check for value in the local value_store -> if not found,
+        check in OS ENV which is populated at command line or by AWS task definition;
+        store result in local value_store
         :param name:
         :return:
         """
-        return os.environ.get(name, NO_VALUE_FOUND)
+        if name in self.value_store.keys():
+            found_value = self.value_store[name]
+        else:
+            found_value = os.environ.get(name, NO_VALUE_FOUND)
+            self.value_store[name] = found_value
+
+        return found_value
 
     def populate_os_env(self):
         app_dict = self.populate_app_dict()
