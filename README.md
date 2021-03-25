@@ -22,7 +22,7 @@ properly constructed arn for a secret in the secrets manager
 
 First, create and/or activate a suitable python3 virtual env, then:
 ```
-pip install https://github.com/huit/pyconfig/archive/v1.0.0.tar.gz
+pip install https://github.com/huit/pyconfig/archive/refs/tags/v0.0.1.tar.gz
 
 from pyconfig.pyconfig import Config, Stack, SecretService, get_config
 ```
