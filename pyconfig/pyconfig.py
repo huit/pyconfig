@@ -90,6 +90,7 @@ class Config:
         app_dict = self.populate_app_dict()
         self.populate_secrets(app_dict)
         self.populate_vars(app_dict)
+        self.populate_plain_vars(app_dict)
 
     def populate_app_dict(self):
         yaml_file_name = f"{self.ansible_vars_dir_path}/dev_ansible_vars.yml"
@@ -112,9 +113,14 @@ class Config:
         self.logger.debug(f"=======INSIDE populate secrets =======")
         try:
             var_dict = app_dict.get(self.SECRETS_REF_KEY)[0]
-            self.logger.debug(var_dict)
-            for k, v in var_dict.items():
-                os.environ[k] = f"{self.get_secret_value(v)}"
+            if var_dict is None or len(var_dict.keys()) == 0:
+                self.logger("Secrets section of config appears to be missing")
+            else:
+                self.logger.debug(var_dict)
+                for k, v in var_dict.items():
+                    secret_value = self.get_secret_value(v)
+                    os.environ[k] = f"{secret_value}"
+
         except yaml.YAMLError as exc:
             self.logger.exception(exc)
 
@@ -136,17 +142,30 @@ class Config:
         self.logger.debug(f"======= parsing pyconfig vars and values =======")
         try:
             var_dict = {}
-            for item in app_dict.get(self.APP_ENV_KEY):
-                for key, value in item.items():
-                    if key == "name":
-                        var_name = value
-                    if key == "value":
-                        var_value = value
-                os.environ[var_name] = f"{var_value}"
+            values_list = app_dict.get(self.APP_ENV_KEY)
+            if values_list is None or len(values_list) == 0:
+                self.logger("Secrets section of config appears to be missing")
+            else:
+                for item in values_list:
+                    for key, value in item.items():
+                        if key == "name":
+                            var_name = value
+                        if key == "value":
+                            var_value = value
+                    os.environ[var_name] = f"{var_value}"
             self.logger.debug(var_dict)
             return var_dict
         except yaml.YAMLError as exc:
             self.logger.exception(exc)
+
+    def populate_plain_vars(self, app_dict):
+        self.logger.debug(f"======= parsing OTHER pyconfig vars and values =======")
+        try:
+            for k, v in app_dict:
+                if k not in [self.APP_ENV_KEY, self.SECRETS_REF_KEY] and v is not None:
+                    os.environ[k] = v
+        except Exception as err:
+            self.logger.exception(err)
 
     def get_secret(self, name):
         secret_name = name
