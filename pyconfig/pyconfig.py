@@ -32,6 +32,18 @@ class SecretService(Enum):
     SECRETS_MANAGER = "secretsmanager"
 
 
+def get_common_logging_format():
+    """
+    returns a basic logging format displaying logging level, file name and line number, and message
+    :return:
+    """
+    return logging.Formatter(
+        '{"log_level": "%(levelname)s", '
+        '"app_file_line": "%(name)s:%(lineno)d", '
+        '"message": %(message)s}'
+    )
+
+
 def get_common_logger_for_module(module_name: str, level: int = 0, log_format: logging.Formatter = get_common_logging_format()) -> logging.Logger:
     """
     Creates and returns a new logger for a module
@@ -60,18 +72,6 @@ def get_common_logger_for_module(module_name: str, level: int = 0, log_format: l
     module_logger.addHandler(hdlr=stream_handler)
 
     return module_logger
-
-
-def get_common_logging_format():
-    """
-    returns a basic logging format displaying logging level, file name and line number, and message
-    :return:
-    """
-    return logging.Formatter(
-        '{"log_level": "%(levelname)s", '
-        '"app_file_line": "%(name)s:%(lineno)d", '
-        '"message": %(message)s}'
-    )
 
 
 class InfoFilter(logging.Filter):
