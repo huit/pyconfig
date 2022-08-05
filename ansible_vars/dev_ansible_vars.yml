@@ -6,20 +6,21 @@
 # for 'target_app_secrets_ref' the task definition will include the lookup keys, which will be
 # fulfilled when the task definition is run
 target_app_secrets_ref:
-  - SOME_SECRET_KEY:  <identifier for a valid aws secret stored in either parameter store or secrets manager>
-    SOME_OTHER_SECRET_KEY: <identifier for a valid aws secret stored in either parameter store or secrets manager>
-    STILL_OTHER_SECRET_KEY: <identifier for a valid aws secret stored in either parameter store or secrets manager>
-# for 'target_app_env' the keys and values are exactly included in the task definition
+  - APIGEE_MACHINE_PASSWORD: apigee-nonprod-common@harvard.edu
+    APIGEE_SLACK_API_KEY: adex-apigee-backup-slack-api-key
+    API_KEY: adex-api-demo-key
+    DB_CONFIG: adex-utilsdb-config-data
 target_app_env:
-  - name: SOME_KEY
-    value: <some value>
-  - name: SOME_OTHER_KEY
-    value: <some other value>
-  - name: STILL_ANOTHER_KEY
-    value: <still another value>
+  - name: APIGEE_MACHINE_USERNAME
+    value: apigee-nonprod-common@harvard.edu
+  - name: APIGEE_ORGANIZATION
+    value: harvard-nonprod
+  - name: DEBUG
+    value: true
 
-
-# other values listed here will be ignored by this module, but
-# could be used by, for example, an ansible deploy script
-deploy_type: <some deploy type>
-target_app_name: <a valid app name for your build process>
+target_app_name: django-api
+target_app_context: /public/adex/django/v1
+target_app_health_check_path: /public/adex/django/v1/health
+successful_response_codes: 200-499
+target_port: 9103
+target_memory_mb: 256

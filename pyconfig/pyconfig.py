@@ -4,18 +4,19 @@ import yaml
 import os
 import boto3
 import base64
+import json
 import logging
 
 from enum import Enum
+from os import linesep
+from os.path import exists
 
 from botocore.exceptions import ClientError
 
-from pylog.pylog import get_common_logger_for_module
 
 #============================================================================================
 # Globals
 #============================================================================================
-CONFIG = None
 NO_VALUE_FOUND = "NO VALUE FOUND"
 
 
@@ -46,9 +47,7 @@ class Config:
 
     def __init__(self, stack: Stack = Stack.LOCAL,
                  secret_service: SecretService = SecretService.SECRETS_MANAGER,
-                 ansible_vars_dir_path: str = "./ansible_vars",
-                 logging_level: int = 50,
-                 logging_format: logging.Formatter = None):
+                 ansible_vars_path: str = "./ansible_vars/dev_ansible_vars.yml"):
         """
                  Retrieve values from OS environment or read from pyconfig files
         :param stack: defaults to Stack.LOCAL
@@ -57,34 +56,32 @@ class Config:
         :param logging_level: defaults to logging.CRITICAL
         :param logging_format: defaults to None
         """
-        self.logger = get_common_logger_for_module(module_name=__name__, level=logging_level, log_format=logging_format)
         self.stack = stack
-        self.config_stack = stack
-        self.ansible_vars_dir_path = ansible_vars_dir_path
+        self.config_stack = Stack.DEV if stack == Stack.LOCAL else stack
+        self.ansible_vars_path = ansible_vars_path
         self.secret_service = secret_service
         self.value_store = {}
-        if self.stack == Stack.LOCAL:
-            self.config_stack = Stack.DEV
-            self.populate_os_env()
+        self.env_file_name = ".env"
+        open(self.env_file_name, 'w').close()  # empty the .env file
+        self.populate_os_env()
+        self.git_ignore_path = "./.gitignore"
+        self.update_git_ignore()
 
-        global CONFIG
-        CONFIG = self
-
-    def get_value(self, name):
+    def update_git_ignore(self):
         """
-        check for value in the local value_store -> if not found,
-        check in OS ENV which is populated at command line or by AWS task definition;
-        store result in local value_store
-        :param name:
+        adds env file (containing secrets) to .gitignore if necessary
         :return:
         """
-        if name in self.value_store.keys():
-            found_value = self.value_store[name]
+        if exists(self.git_ignore_path):
+            with open(self.git_ignore_path, 'r') as f:
+                lines = f.readlines()
+                f.close()
         else:
-            found_value = os.environ.get(name, NO_VALUE_FOUND)
-            self.value_store[name] = found_value
-
-        return found_value
+            lines = []
+        if f"{self.env_file_name}\n" not in lines:
+            with open(self.git_ignore_path, "a") as git_ignore:
+                git_ignore.write(f"\n# pyconfig added generated {self.env_file_name} file \n{self.env_file_name} to protect secrets \n")
+                git_ignore.close()
 
     def populate_os_env(self):
         app_dict = self.populate_app_dict()
@@ -93,7 +90,7 @@ class Config:
         self.populate_plain_vars(app_dict)
 
     def populate_app_dict(self):
-        yaml_file_name = f"{self.ansible_vars_dir_path}/dev_ansible_vars.yml"
+        yaml_file_name = self.ansible_vars_path
         with open(yaml_file_name) as yaml_file_obj:
             app_dict = yaml.load(yaml_file_obj, Loader=yaml.FullLoader)
         return app_dict
@@ -110,19 +107,19 @@ class Config:
         :param app_dict:
         :return:
         """
-        self.logger.debug(f"=======INSIDE populate secrets =======")
+        print(f"======= populating secrets from AWS {self.secret_service.value} =======")
         try:
-            var_dict = app_dict.get(self.SECRETS_REF_KEY)[0]
-            if var_dict is None or len(var_dict.keys()) == 0:
-                self.logger("Secrets section of config appears to be missing")
-            else:
-                self.logger.debug(var_dict)
-                for k, v in var_dict.items():
-                    secret_value = self.get_secret_value(v)
-                    os.environ[k] = f"{secret_value}"
+            with open(self.env_file_name, 'a') as env_file:
+                var_dict = app_dict.get(self.SECRETS_REF_KEY)[0]
+                if var_dict is None or len(var_dict.keys()) == 0:
+                    print("Secrets section of config appears to be missing")
+                else:
+                    for k, v in var_dict.items():
+                        secret_value = f"{self.get_secret_value(v)}"
+                        env_file.write(f"{k}={secret_value.replace(linesep, '').replace('  ','')}\n")
 
         except yaml.YAMLError as exc:
-            self.logger.exception(exc)
+            print.exception(f"ERROR: {exc}")
 
     def populate_vars(self, app_dict):
         """
@@ -139,33 +136,33 @@ class Config:
         :param app_dict:
         :return:
         """
-        self.logger.debug(f"======= parsing pyconfig vars and values =======")
+        print(f"======= parsing pyconfig vars and values =======")
         try:
-            var_dict = {}
-            values_list = app_dict.get(self.APP_ENV_KEY)
-            if values_list is None or len(values_list) == 0:
-                self.logger("Secrets section of config appears to be missing")
-            else:
-                for item in values_list:
-                    for key, value in item.items():
-                        if key == "name":
-                            var_name = value
-                        if key == "value":
-                            var_value = value
-                    os.environ[var_name] = f"{var_value}"
-            self.logger.debug(var_dict)
-            return var_dict
+            with open(self.env_file_name, 'a') as env_file:
+                values_list = app_dict.get(self.APP_ENV_KEY)
+                if values_list is None or len(values_list) == 0:
+                    print("Secrets section of config appears to be missing")
+                else:
+                    for item in values_list:
+                        for key, value in item.items():
+                            if key == "name":
+                                var_name = value
+                            if key == "value":
+                                var_value = f"{value}"
+                        env_file.write(f"{var_name}={var_value.replace(linesep, '')}\n")
         except yaml.YAMLError as exc:
-            self.logger.exception(exc)
+            print.exception(f"ERROR: {exc}")
 
     def populate_plain_vars(self, app_dict):
-        self.logger.debug(f"======= parsing OTHER pyconfig vars and values =======")
+        print(f"======= parsing OTHER pyconfig vars and values =======")
         try:
-            for k, v in app_dict:
-                if k not in [self.APP_ENV_KEY, self.SECRETS_REF_KEY] and v is not None:
-                    os.environ[k] = v
+            with open(self.env_file_name, 'a') as env_file:
+                for k, v in app_dict.items():
+                    if k not in [self.APP_ENV_KEY, self.SECRETS_REF_KEY] and v is not None:
+                        env_file.write(f"{k}={v}\n")
+
         except Exception as err:
-            self.logger.exception(err)
+            print.exception(f"ERROR: {exc}")
 
     def get_secret(self, name):
         secret_name = name
@@ -179,7 +176,7 @@ class Config:
             else:
                 secret = base64.b64decode(get_secret_value_response["SecretBinary"])
         except ClientError as error:
-            self.logger.error("Lookup " + secret_name + ": " + str(error))
+            print("ERROR: Lookup " + secret_name + ": " + str(error))
             secret = error
         return secret
 
@@ -188,7 +185,7 @@ class Config:
          Retrieve a parameter from SSM
          """
         ssm_client = boto3.client('ssm')
-        self.logger.info(f"param name = {name}")
+        print(f"param name = {name}")
         parameter = ssm_client.get_parameter(
             Name=name,
             WithDecryption=True)
@@ -211,11 +208,4 @@ class Config:
             return NO_VALUE_FOUND
 
 
-def get_config():
-    """
-    Function to retrieve the global application pyconfig
-    """
-    global CONFIG # pylint: disable=global-statement
-    if CONFIG is None:
-        CONFIG = Config()
-    return CONFIG
+Config()
