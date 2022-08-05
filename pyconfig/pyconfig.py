@@ -21,7 +21,6 @@ NO_VALUE_FOUND = "NO VALUE FOUND"
 
 
 class Stack(Enum):
-    LOCAL = "local"
     SAND = "sand"
     DEV = "dev"
     TEST = "test"
@@ -45,27 +44,30 @@ class Config:
     APP_ENV_KEY = 'target_app_env'
     SECRETS_REF_KEY = 'target_app_secrets_ref'
 
-    def __init__(self, stack: Stack = Stack.LOCAL,
+    def __init__(self, stack: Stack = Stack.DEV,
                  secret_service: SecretService = SecretService.SECRETS_MANAGER,
-                 ansible_vars_path: str = "./ansible_vars/dev_ansible_vars.yml"):
+                 ansible_vars_path: str = None,
+                 env_file_name: str = ".env"):
         """
                  Retrieve values from OS environment or read from pyconfig files
         :param stack: defaults to Stack.LOCAL
         :param secret_service: defaults to SecretService.SECRETS_MANAGER
         :param ansible_vars_dir_path: defaults to './ansible_vars'
-        :param logging_level: defaults to logging.CRITICAL
-        :param logging_format: defaults to None
         """
+        print(f"======= \n=======  CREATING env file from ansible_vars file  =======\n=======")
         self.stack = stack
-        self.config_stack = Stack.DEV if stack == Stack.LOCAL else stack
-        self.ansible_vars_path = ansible_vars_path
+        print(f"======= stack => {self.stack.value}")
+        self.ansible_vars_path = ansible_vars_path if ansible_vars_path is not None else f"./ansible_vars/{self.stack.value}_ansible_vars.yml"
+        print(f"======= ansible_vars_path => {self.ansible_vars_path}")
         self.secret_service = secret_service
         self.value_store = {}
-        self.env_file_name = ".env"
-        open(self.env_file_name, 'w').close()  # empty the .env file
+        self.env_file_name = env_file_name
+        print(f"======= env_file_name => {self.env_file_name}")
+        open(self.env_file_name, 'w').close()  # clear the contents of env_file_name and create file if necessary
         self.populate_os_env()
         self.git_ignore_path = "./.gitignore"
         self.update_git_ignore()
+        print(f"======= \n=======  DONE - process complete  =======\n=======")
 
     def update_git_ignore(self):
         """
@@ -79,9 +81,12 @@ class Config:
         else:
             lines = []
         if f"{self.env_file_name}\n" not in lines:
+            print(f"======= updating .gitignore - adding {self.env_file_name}")
             with open(self.git_ignore_path, "a") as git_ignore:
                 git_ignore.write(f"\n# pyconfig added generated {self.env_file_name} file \n{self.env_file_name} to protect secrets \n")
                 git_ignore.close()
+        else:
+            print(f"======= no need to update .gitignore - {self.env_file_name} already present")
 
     def populate_os_env(self):
         app_dict = self.populate_app_dict()
@@ -107,7 +112,7 @@ class Config:
         :param app_dict:
         :return:
         """
-        print(f"======= populating secrets from AWS {self.secret_service.value} =======")
+        print(f"======= populating target_app_secrets_ref vars with values from AWS {self.secret_service.value}")
         try:
             with open(self.env_file_name, 'a') as env_file:
                 var_dict = app_dict.get(self.SECRETS_REF_KEY)[0]
@@ -136,7 +141,7 @@ class Config:
         :param app_dict:
         :return:
         """
-        print(f"======= parsing pyconfig vars and values =======")
+        print(f"======= populating target_app_env vars and values ")
         try:
             with open(self.env_file_name, 'a') as env_file:
                 values_list = app_dict.get(self.APP_ENV_KEY)
@@ -154,7 +159,7 @@ class Config:
             print.exception(f"ERROR: {exc}")
 
     def populate_plain_vars(self, app_dict):
-        print(f"======= parsing OTHER pyconfig vars and values =======")
+        print(f"======= populating 'root' key/value pairs")
         try:
             with open(self.env_file_name, 'a') as env_file:
                 for k, v in app_dict.items():
@@ -198,7 +203,7 @@ class Config:
         :return:
         """
         if self.secret_service == SecretService.SECRETS_MANAGER:
-            l_secret = os.environ.get(name, self.get_secret(self.config_stack.value + "/" + name))
+            l_secret = os.environ.get(name, self.get_secret(self.stack.value + "/" + name))
         elif self.secret_service == SecretService.SSM:
             l_secret = os.environ.get(name, self.get_ssm_param(name))
 
@@ -206,6 +211,3 @@ class Config:
             return l_secret
         else:
             return NO_VALUE_FOUND
-
-
-Config()
